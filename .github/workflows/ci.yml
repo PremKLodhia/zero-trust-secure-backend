@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ main, master ]
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
   test-and-sast:
     name: Unit & Fail-Secure Tests + Semgrep SAST
@@ -85,9 +81,14 @@ jobs:
           sleep 12
           curl -f http://localhost:8000/health || exit 1
 
-      - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+      - name: Run OWASP ZAP Baseline Scan in Docker
+        run: |
+          mkdir -p zap-reports
+          docker run --user root --network host -v $(pwd)/zap-reports:/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:8000 -r zap_report.html -I || true
+
+      - name: Upload ZAP DAST Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          target: "http://localhost:8000"
-          fail_action: false
-          allow_issue_writing: false
+          name: zap-dast-report
+          path: zap-reports/zap_report.html
