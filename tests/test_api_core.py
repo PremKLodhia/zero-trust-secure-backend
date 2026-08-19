@@ -1,5 +1,8 @@
 ﻿import pytest
+from src.auth.tokens.service import create_access_token
 from src.models.audit_log import AuditLog
+from src.authz.client import opa_client
+from unittest.mock import patch
 
 def test_health_check(client):
     response = client.get("/health")
@@ -27,42 +30,46 @@ def test_create_and_get_user(client):
     assert logs[0]["actor_id"] == "admin_root"
 
 def test_case_file_crud_and_audit_trail(client):
-    # 1. Create User
+    # 1. Create User & Token
     user_resp = client.post("/users", json={"username": "analyst_bob", "email": "bob@example.com", "role": "analyst"})
     assert user_resp.status_code == 201
     analyst_id = user_resp.json()["id"]
+    token = create_access_token(user_id=analyst_id, role="analyst")
+    headers = {"Authorization": f"Bearer {token}"}
 
-    # 2. Create Case File
-    case_payload = {
-        "title": "Operation Red Sky - Evidence Bundle",
-        "classification": "TLP:AMBER",
-        "assigned_analyst_id": analyst_id,
-        "content": "Encrypted memory dump artifact hash: sha256_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "pii_subject": "SYNTHETIC_SUBJECT_PERSON_A_DOB_19850101",
-        "metadata_json": "{\"evidence_type\": \"memory_dump\", \"priority\": \"high\"}"
-    }
-    create_resp = client.post("/cases", json=case_payload, headers={"X-Actor-ID": analyst_id, "X-Actor-Role": "analyst"})
-    assert create_resp.status_code == 201
-    case_data = create_resp.json()
-    case_id = case_data["id"]
-    assert case_data["title"] == case_payload["title"]
+    # Mock OPA to allow standard CRUD for bob
+    with patch.object(opa_client, "evaluate_access", return_value=True):
+        # 2. Create Case File
+        case_payload = {
+            "title": "Operation Red Sky - Evidence Bundle",
+            "classification": "TLP:AMBER",
+            "assigned_analyst_id": analyst_id,
+            "content": "Encrypted memory dump artifact hash: sha256_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pii_subject": "SYNTHETIC_SUBJECT_PERSON_A_DOB_19850101",
+            "metadata_json": "{\"evidence_type\": \"memory_dump\", \"priority\": \"high\"}"
+        }
+        create_resp = client.post("/cases", json=case_payload, headers=headers)
+        assert create_resp.status_code == 201
+        case_data = create_resp.json()
+        case_id = case_data["id"]
+        assert case_data["title"] == case_payload["title"]
 
-    # 3. Read Case File
-    get_resp = client.get(f"/cases/{case_id}", headers={"X-Actor-ID": analyst_id, "X-Actor-Role": "analyst"})
-    assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == case_id
+        # 3. Read Case File
+        get_resp = client.get(f"/cases/{case_id}", headers=headers)
+        assert get_resp.status_code == 200
+        assert get_resp.json()["id"] == case_id
 
-    # 4. Update Case File
-    update_payload = {"classification": "TLP:RED"}
-    update_resp = client.put(f"/cases/{case_id}", json=update_payload, headers={"X-Actor-ID": analyst_id, "X-Actor-Role": "analyst"})
-    assert update_resp.status_code == 200
-    assert update_resp.json()["classification"] == "TLP:RED"
+        # 4. Update Case File
+        update_payload = {"classification": "TLP:RED"}
+        update_resp = client.put(f"/cases/{case_id}", json=update_payload, headers=headers)
+        assert update_resp.status_code == 200
+        assert update_resp.json()["classification"] == "TLP:RED"
 
-    # 5. Verify Audit Logs for Case
-    audit_resp = client.get("/audit-logs?resource_type=case_file")
-    assert audit_resp.status_code == 200
-    logs = audit_resp.json()
-    actions = [l["action"] for l in logs]
-    assert "CREATE_CASE" in actions
-    assert "GET_CASE" in actions
-    assert "UPDATE_CASE" in actions
+        # 5. Verify Audit Logs for Case
+        audit_resp = client.get("/audit-logs?resource_type=case_file")
+        assert audit_resp.status_code == 200
+        logs = audit_resp.json()
+        actions = [l["action"] for l in logs]
+        assert "CREATE_CASE" in actions
+        assert "READ_CASE" in actions
+        assert "UPDATE_CASE" in actions
