@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   test-and-sast:
     name: Unit & Fail-Secure Tests + Semgrep SAST
@@ -86,3 +90,4 @@ jobs:
         with:
           target: "http://localhost:8000"
           fail_action: false
+          allow_issue_writing: false

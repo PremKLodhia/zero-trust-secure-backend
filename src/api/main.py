@@ -1,5 +1,5 @@
 ﻿import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from contextlib import asynccontextmanager
 from src.config import settings
@@ -25,6 +25,16 @@ app = FastAPI(
     Implements WebAuthn passkey authentication, OIDC federated login, rotating refresh tokens with reuse detection, OPA fail-secure authorization, and Vault envelope encryption.
     """
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self';"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 app.include_router(auth_router)
 app.include_router(cases_router)
