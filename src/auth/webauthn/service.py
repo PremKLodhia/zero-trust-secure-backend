@@ -1,6 +1,5 @@
 import base64
 import json
-import secrets
 from typing import Dict, Any, Tuple
 from webauthn import (
     generate_registration_options,
@@ -9,18 +8,16 @@ from webauthn import (
     verify_authentication_response,
     options_to_json,
 )
+from webauthn.helpers.parse_registration_credential_json import parse_registration_credential_json
+from webauthn.helpers.parse_authentication_credential_json import parse_authentication_credential_json
 from webauthn.helpers.structs import (
-    PublicKeyCredentialCreationOptions,
-    PublicKeyCredentialRequestOptions,
-    RegistrationCredential,
-    AuthenticationCredential,
     UserVerificationRequirement,
     AuthenticatorSelectionCriteria,
     ResidentKeyRequirement,
 )
 from src.config import settings
 
-# In-memory challenge store for active ceremonies (in production, backed by Redis/DB)
+# In-memory challenge store for active ceremonies
 _active_challenges: Dict[str, bytes] = {}
 
 def get_registration_options(user_id: str, username: str, user_display_name: str) -> str:
@@ -44,8 +41,11 @@ def verify_registration(user_id: str, credential_json: str) -> Tuple[str, str, i
     if not expected_challenge:
         raise ValueError("No active registration challenge found for user")
 
+    # In webauthn 3.0.0, use parse_registration_credential_json for Pydantic V2 compatibility
+    credential = parse_registration_credential_json(credential_json)
+
     verification = verify_registration_response(
-        credential=RegistrationCredential.parse_raw(credential_json),
+        credential=credential,
         expected_challenge=expected_challenge,
         expected_origin=settings.WEBAUTHN_ORIGIN,
         expected_rp_id=settings.WEBAUTHN_RP_ID,
@@ -80,8 +80,11 @@ def verify_authentication(
 
     raw_public_key = base64.urlsafe_b64decode(public_key_b64.encode("utf-8"))
 
+    # In webauthn 3.0.0, use parse_authentication_credential_json for Pydantic V2 compatibility
+    credential = parse_authentication_credential_json(credential_json)
+
     verification = verify_authentication_response(
-        credential=AuthenticationCredential.parse_raw(credential_json),
+        credential=credential,
         expected_challenge=expected_challenge,
         expected_origin=settings.WEBAUTHN_ORIGIN,
         expected_rp_id=settings.WEBAUTHN_RP_ID,
