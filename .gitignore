@@ -1,0 +1,34 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Database & local state
+*.sqlite3
+*.db
+*.log
+data/
+vault_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Crypto & keys
+*.pem
+*.key
+*.crt
