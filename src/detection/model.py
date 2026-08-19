@@ -43,7 +43,7 @@ class IdentityThreatDetector:
         X = np.array([feats])
         pred = self.model.predict(X)[0]  # -1 for anomaly, 1 for normal
         score = float(self.model.decision_function(X)[0])
-        is_anomaly = (pred == -1)
+        is_anomaly = bool(pred == -1)
 
-        feature_dict = dict(zip(TelemetryFeatureExtractor.FEATURE_NAMES, feats))
+        feature_dict = dict(zip(TelemetryFeatureExtractor.FEATURE_NAMES, [float(f) for f in feats]))
         return is_anomaly, score, feature_dict

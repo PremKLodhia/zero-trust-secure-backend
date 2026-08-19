@@ -1,0 +1,55 @@
+{
+  "benign_baseline": {
+    "total_test_samples": 100,
+    "false_positives": 6,
+    "true_negatives": 94,
+    "false_positive_rate": 0.06
+  },
+  "per_category_metrics": {
+    "Credential Stuffing (T1110.003)": {
+      "samples": 50,
+      "tp": 50,
+      "fn": 0,
+      "fp": 6,
+      "tn": 94,
+      "precision": 0.8928571428571429,
+      "recall": 1.0,
+      "f1_score": 0.9433962264150945
+    },
+    "Impossible Travel (T1078)": {
+      "samples": 50,
+      "tp": 50,
+      "fn": 0,
+      "fp": 6,
+      "tn": 94,
+      "precision": 0.8928571428571429,
+      "recall": 1.0,
+      "f1_score": 0.9433962264150945
+    },
+    "MFA Push-Bombing (T1621)": {
+      "samples": 50,
+      "tp": 50,
+      "fn": 0,
+      "fp": 6,
+      "tn": 94,
+      "precision": 0.8928571428571429,
+      "recall": 1.0,
+      "f1_score": 0.9433962264150945
+    }
+  },
+  "held_out_blended_pattern": {
+    "samples": 30,
+    "tp": 30,
+    "fn": 0,
+    "fp": 6,
+    "tn": 94,
+    "precision": 0.8333333333333334,
+    "recall": 1.0,
+    "f1_score": 0.9090909090909091
+  },
+  "latency_benchmarks": {
+    "baseline_ms": 5.1799986977130175e-05,
+    "full_stack_ms": 2.0978552000015043,
+    "overhead_ms": 2.097803400014527
+  }
+}

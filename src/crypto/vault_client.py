@@ -1,4 +1,4 @@
-import os
+﻿import os
 import base64
 import logging
 import hvac
@@ -18,17 +18,21 @@ class VaultTransitClient:
         self.vault_addr = vault_addr or settings.VAULT_ADDR
         self.token = token or settings.VAULT_TOKEN
         self.transit_key = transit_key or settings.VAULT_TRANSIT_KEY
-        # Exactly 32 bytes (256-bit key) for AESGCM
         self._local_master_key = b"LOCAL_DEV_MASTER_KEK_32_BYTES_K!"
+        self._client_cache = None
+        self._vault_checked = False
 
     def _get_hvac_client(self):
+        if self._vault_checked:
+            return self._client_cache
         try:
-            client = hvac.Client(url=self.vault_addr, token=self.token)
+            client = hvac.Client(url=self.vault_addr, token=self.token, timeout=0.5)
             if client.is_authenticated():
-                return client
+                self._client_cache = client
         except Exception:
-            pass
-        return None
+            self._client_cache = None
+        self._vault_checked = True
+        return self._client_cache
 
     def wrap_key(self, plaintext_dek: bytes) -> str:
         """Wraps (encrypts) a Data Encryption Key using Vault Transit KEK."""
