@@ -7,6 +7,8 @@ from src.models.audit_log import AuditLog
 from src.schemas.case_file import CaseFileCreate, CaseFileUpdate, CaseFileResponse
 from src.authz.dependencies import get_current_user
 from src.authz.client import opa_client
+from src.crypto.envelope import EnvelopeCrypto
+from src.crypto.field_crypto import FieldCrypto
 
 router = APIRouter(prefix="/cases", tags=["Case Files"])
 
@@ -61,12 +63,19 @@ def create_case(
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied by policy engine")
 
+    # Envelope Encryption for Content (DEK + Vault KEK wrapping)
+    ciphertext_b64, wrapped_dek = EnvelopeCrypto.encrypt_case_content(case_in.content)
+
+    # Field-Level Encryption for PII Subject
+    encrypted_pii = FieldCrypto.encrypt_field(case_in.pii_subject)
+
     case = CaseFile(
         title=case_in.title,
         classification=case_in.classification,
         assigned_analyst_id=case_in.assigned_analyst_id,
-        encrypted_content=case_in.content,
-        encrypted_pii_subject=case_in.pii_subject,
+        encrypted_content=ciphertext_b64,
+        encrypted_pii_subject=encrypted_pii,
+        wrapped_dek=wrapped_dek,
         metadata_json=case_in.metadata_json or "{}"
     )
     db.add(case)
@@ -81,7 +90,7 @@ def create_case(
         resource_id=case.id,
         client_ip=client_ip,
         status="SUCCESS",
-        details=f"Created case: {case.title} ({case.classification})"
+        details=f"Created encrypted case: {case.title} ({case.classification})"
     )
 
     return case
@@ -178,6 +187,60 @@ def get_case(
 
     return case
 
+@router.get("/{case_id}/decrypt")
+def get_decrypted_case(
+    case_id: str,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Authorized endpoint to decrypt envelope ciphertext and field-level PII on the fly."""
+    client_ip = request.client.host if request.client else "127.0.0.1"
+
+    case = db.query(CaseFile).filter(CaseFile.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case file not found")
+
+    case_attributes = {
+        "id": case.id,
+        "classification": case.classification,
+        "assigned_analyst_id": case.assigned_analyst_id
+    }
+
+    allowed = opa_client.evaluate_access(
+        user=current_user,
+        action="READ_CASE",
+        resource_type="case_file",
+        case=case_attributes
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied by policy engine")
+
+    decrypted_content = EnvelopeCrypto.decrypt_case_content(case.encrypted_content, case.wrapped_dek)
+    decrypted_pii = FieldCrypto.decrypt_field(case.encrypted_pii_subject)
+
+    log_audit_event(
+        db=db,
+        actor_id=current_user["id"],
+        actor_role=current_user["role"],
+        action="DECRYPT_CASE_CONTENT",
+        resource_id=case.id,
+        client_ip=client_ip,
+        status="SUCCESS",
+        details=f"Decrypted case content for {case.title}"
+    )
+
+    return {
+        "id": case.id,
+        "title": case.title,
+        "classification": case.classification,
+        "assigned_analyst_id": case.assigned_analyst_id,
+        "content": decrypted_content,
+        "pii_subject": decrypted_pii,
+        "metadata_json": case.metadata_json,
+        "created_at": case.created_at
+    }
+
 @router.put("/{case_id}", response_model=CaseFileResponse)
 def update_case(
     case_id: str,
@@ -224,9 +287,11 @@ def update_case(
     if case_update.assigned_analyst_id is not None:
         case.assigned_analyst_id = case_update.assigned_analyst_id
     if case_update.content is not None:
-        case.encrypted_content = case_update.content
+        ct, wrapped = EnvelopeCrypto.encrypt_case_content(case_update.content)
+        case.encrypted_content = ct
+        case.wrapped_dek = wrapped
     if case_update.pii_subject is not None:
-        case.encrypted_pii_subject = case_update.pii_subject
+        case.encrypted_pii_subject = FieldCrypto.encrypt_field(case_update.pii_subject)
     if case_update.metadata_json is not None:
         case.metadata_json = case_update.metadata_json
 
