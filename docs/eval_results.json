@@ -48,8 +48,8 @@
     "f1_score": 0.9090909090909091
   },
   "latency_benchmarks": {
-    "baseline_ms": 5.1799986977130175e-05,
-    "full_stack_ms": 2.0978552000015043,
-    "overhead_ms": 2.097803400014527
+    "baseline_ms": 0.00010800000745803118,
+    "full_stack_ms": 2.1006903999950737,
+    "overhead_ms": 2.1005823999876156
   }
 }
