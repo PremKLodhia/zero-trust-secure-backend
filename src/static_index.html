@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zero-Trust Evidence Exchange - Passkey Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  <style>
+    body { background-color: #0b0f19; color: #f3f4f6; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-6">
+  <div class="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-8 space-y-6">
+    
+    <div class="flex items-center space-x-3 border-b border-slate-800 pb-4">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xl">
+        🛡️
+      </div>
+      <div>
+        <h1 class="text-xl font-bold text-white">Zero-Trust Evidence Exchange</h1>
+        <p class="text-sm text-slate-400">FIDO2 / WebAuthn Hardware-Bound Passkey Ceremony</p>
+      </div>
+    </div>
+
+    <!-- Step 1: Username Input -->
+    <div class="space-y-2">
+      <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Analyst Identity</label>
+      <div class="flex space-x-3">
+        <input id="username" type="text" value="analyst_demo" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" placeholder="Enter username">
+        <input id="email" type="email" value="demo@example.com" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" placeholder="Enter email">
+      </div>
+    </div>
+
+    <!-- Step 2: Passkey Actions -->
+    <div class="grid grid-cols-2 gap-4">
+      <button id="btn-register" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-lg shadow-emerald-900/30 flex items-center justify-center space-x-2">
+        <span>🔑</span>
+        <span>Register Passkey</span>
+      </button>
+
+      <button id="btn-login" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-lg shadow-blue-900/30 flex items-center justify-center space-x-2">
+        <span>🔐</span>
+        <span>Login with Passkey</span>
+      </button>
+    </div>
+
+    <!-- Live Status Console -->
+    <div class="space-y-2">
+      <div class="flex justify-between items-center">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ceremony Output & Token Store</label>
+        <span id="status-badge" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">Idle</span>
+      </div>
+      <pre id="log-console" class="bg-black/50 border border-slate-800 rounded-lg p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-64 whitespace-pre-wrap">Ready. Click 'Register Passkey' to enroll Windows Hello / Touch ID / YubiKey.</pre>
+    </div>
+
+    <!-- API Docs link -->
+    <div class="pt-4 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
+      <span>Protected by Open Policy Agent & Vault Transit</span>
+      <a href="/docs" target="_blank" class="text-emerald-400 hover:underline">Open Swagger API Docs &rarr;</a>
+    </div>
+  </div>
+
+  <script>
+    const logConsole = document.getElementById('log-console');
+    const statusBadge = document.getElementById('status-badge');
+    let currentUserId = null;
+    let jwtToken = null;
+
+    function log(msg, type = 'info') {
+      const ts = new Date().toLocaleTimeString();
+      logConsole.textContent = `[${ts}] ${msg}
+
+` + logConsole.textContent;
+      if (type === 'success') {
+        statusBadge.className = 'text-xs px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-400 border border-emerald-700';
+        statusBadge.textContent = 'Success';
+      } else if (type === 'error') {
+        statusBadge.className = 'text-xs px-2 py-0.5 rounded bg-rose-900/50 text-rose-400 border border-rose-700';
+        statusBadge.textContent = 'Error';
+      } else {
+        statusBadge.className = 'text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400 border border-blue-700';
+        statusBadge.textContent = 'Processing';
+      }
+    }
+
+    async function ensureUserExists() {
+      const username = document.getElementById('username').value.trim();
+      const email = document.getElementById('email').value.trim();
+      
+      try {
+        const res = await fetch('/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actor-ID': 'admin_root', 'X-Actor-Role': 'admin' },
+          body: JSON.stringify({ username, email, role: 'analyst' })
+        });
+        if (res.status === 201) {
+          const user = await res.json();
+          currentUserId = user.id;
+          return user.id;
+        } else {
+          const listRes = await fetch('/users');
+          const users = await listRes.json();
+          const found = users.find(u => u.username === username);
+          if (found) {
+            currentUserId = found.id;
+            return found.id;
+          }
+        }
+      } catch (err) {
+        log('Error creating/fetching user: ' + err.message, 'error');
+      }
+      return null;
+    }
+
+    document.getElementById('btn-register').addEventListener('click', async () => {
+      try {
+        log('Step 1: Initializing user account...');
+        const userId = await ensureUserExists();
+        if (!userId) throw new Error('Could not resolve user ID');
+
+        log('Step 2: Requesting WebAuthn registration options from backend...');
+        const optRes = await fetch('/auth/webauthn/register/options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId })
+        });
+        const optData = await optRes.json();
+        const options = JSON.parse(optData.options);
+
+        log('Step 3: Prompting browser for biometric / security key creation (Windows Hello / Touch ID)...');
+        const attResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+
+        log('Step 4: Sending attestation to backend for cryptographic verification...');
+        const verifyRes = await fetch('/auth/webauthn/register/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, credential_json: JSON.stringify(attResp) })
+        });
+        const verifyData = await verifyRes.json();
+
+        if (verifyRes.ok) {
+          log('✅ Passkey registered successfully! Credential ID stored in backend.
+You can now click "Login with Passkey".', 'success');
+        } else {
+          log('❌ Registration failed: ' + JSON.stringify(verifyData), 'error');
+        }
+      } catch (err) {
+        log('❌ Registration error: ' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      const username = document.getElementById('username').value.trim();
+      try {
+        log('Step 1: Requesting WebAuthn authentication challenge for ' + username + '...');
+        const optRes = await fetch('/auth/webauthn/login/options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+        if (!optRes.ok) throw new Error('User not found or no passkey registered yet. Register first!');
+        const optData = await optRes.json();
+        const options = JSON.parse(optData.options);
+
+        log('Step 2: Prompting for biometric assertion (Windows Hello / Touch ID)...');
+        const asseResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+        log('Step 3: Submitting assertion signature to backend for cryptographic verification...');
+        const verifyRes = await fetch('/auth/webauthn/login/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, credential_json: JSON.stringify(asseResp) })
+        });
+        const tokenData = await verifyRes.json();
+
+        if (verifyRes.ok) {
+          jwtToken = tokenData.access_token;
+          log('🎉 WebAuthn Login Successful!
+
+Access Token (15m Short-Lived JWT):
+' + jwtToken + '
+
+Refresh Token (Rotating Family):
+' + tokenData.refresh_token, 'success');
+        } else {
+          log('❌ Authentication failed: ' + JSON.stringify(tokenData), 'error');
+        }
+      } catch (err) {
+        log('❌ Authentication error: ' + err.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

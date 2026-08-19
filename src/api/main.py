@@ -1,4 +1,6 @@
-﻿from fastapi import FastAPI
+﻿import os
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, FileResponse
 from contextlib import asynccontextmanager
 from src.config import settings
 from src.database import engine, Base
@@ -20,7 +22,7 @@ app = FastAPI(
     description="""
     ## Zero-Trust Secure Backend & Identity Threat Detection
     
-    Implements WebAuthn passkey authentication, OIDC federated login, rotating refresh tokens with reuse detection, and append-only audit logging.
+    Implements WebAuthn passkey authentication, OIDC federated login, rotating refresh tokens with reuse detection, OPA fail-secure authorization, and Vault envelope encryption.
     """
 )
 
@@ -29,11 +31,19 @@ app.include_router(cases_router)
 app.include_router(users_router)
 app.include_router(audit_router)
 
+@app.get("/", response_class=HTMLResponse, tags=["WebAuthn UI"])
+def index():
+    html_path = os.path.join(os.path.dirname(__file__), "..", "static_index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse("<h1>Zero-Trust Backend Running</h1><p><a href='/docs'>Swagger API Docs</a></p>")
+
 @app.get("/health", tags=["Health"])
 def health_check():
     return {
         "status": "healthy",
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "auth_enforcement": "phase_3_authn_enabled"
+        "auth_enforcement": "active"
     }
