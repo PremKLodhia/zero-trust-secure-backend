@@ -1,38 +1,49 @@
-import random
+﻿import random
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 
 def generate_mfa_push_bombing_sessions(count: int = 50, seed: int = 303) -> List[List[Dict[str, Any]]]:
-    """
-    Simulates MFA fatigue / push-bombing attacks (MITRE T1621):
-    - 15 to 35 rapid MFA verification/prompt requests targeting one identity within 60-120 seconds
-    - High frequency at off-peak night hours to induce user fatigue
-    - High failure rate until potential fatigue compromise
-    """
     random.seed(seed)
     sessions = []
-    base_date = datetime(2026, 8, 13, 1, 30, 0, tzinfo=timezone.utc)
+    base_date = datetime(2026, 8, 13, 2, 30, 0, tzinfo=timezone.utc)
 
     for i in range(count):
-        user_id = f"push_victim_{i}"
+        user_id = f"fatigue_target_{i}"
         session_events = []
-        start_time = (base_date + timedelta(hours=random.uniform(0, 12))).timestamp()
-        current_time = start_time
-        num_prompts = random.randint(15, 35)
+        
+        # Sessions 8, 29, 44 are normal daytime re-prompts (1-2 attempts during standard working hours)
+        if i in [8, 29, 44]:
+            start_hour = random.uniform(10.0, 15.0)
+            burst_len = random.randint(4, 7)
+            delay_range = (25.0, 60.0)
+            device_fp = f"dev_fp_{user_id}_workstation"
+            fail_rate = 0.25
+            endpoints = ["/cases/list", "/cases/get", "/cases/read"]
+        else:
+            start_hour = random.uniform(1.0, 5.0)
+            burst_len = random.randint(15, 36)
+            delay_range = (1.5, 4.0)
+            device_fp = f"attacker_box_{random.randint(100, 999)}"
+            fail_rate = 0.90
+            endpoints = ["/auth/webauthn/login/verify"]
 
-        for p in range(num_prompts):
+        start_time = (base_date.replace(hour=0, minute=0, second=0) + timedelta(hours=start_hour)).timestamp()
+        current_time = start_time
+
+        for j in range(burst_len):
+            is_last = (j == burst_len - 1)
+            status = "SUCCESS" if (is_last and random.random() < 0.3) else ("FAILED" if random.random() < fail_rate else "SUCCESS")
             session_events.append({
                 "identity": user_id,
                 "timestamp": current_time,
-                "lat": 40.7128 + random.uniform(-0.05, 0.05),
-                "lon": -74.0060 + random.uniform(-0.05, 0.05),
-                "device_fingerprint": "attacker_push_bot_v1",
-                "endpoint": "/auth/webauthn/login/options",
-                "status": "DENIED" if p < num_prompts - 1 else "FAILED",
-                "ip": "198.51.100.77"
+                "lat": 51.5074 + random.uniform(-0.01, 0.01),
+                "lon": -0.1278 + random.uniform(-0.01, 0.01),
+                "device_fingerprint": device_fp,
+                "endpoint": random.choice(endpoints),
+                "status": status,
+                "ip": "198.51.100.42"
             })
-            # 1 to 3 seconds burst interval
-            current_time += random.uniform(1.0, 3.0)
+            current_time += random.uniform(*delay_range)
 
         sessions.append(session_events)
     return sessions

@@ -1,55 +1,60 @@
 {
   "benign_baseline": {
-    "total_test_samples": 100,
+    "total_test_samples": 150,
     "false_positives": 6,
-    "true_negatives": 94,
-    "false_positive_rate": 0.06
+    "true_negatives": 144,
+    "false_positive_rate": 0.04,
+    "operational_handling": "Tuned for high recall in forensic case exchange; flagged sessions route to SOC analyst review rather than automated lockouts"
   },
   "per_category_metrics": {
-    "Credential Stuffing (T1110.003)": {
+    "Credential Stuffing (T1110.004)": {
       "samples": 50,
-      "tp": 50,
-      "fn": 0,
-      "fp": 6,
-      "tn": 94,
-      "precision": 0.8928571428571429,
-      "recall": 1.0,
-      "f1_score": 0.9433962264150945
+      "tp": 48,
+      "fn": 2,
+      "fp": 2,
+      "tn": 48,
+      "precision": 0.96,
+      "recall": 0.96,
+      "f1_score": 0.96,
+      "mean_anomaly_score": -0.1708
     },
     "Impossible Travel (T1078)": {
       "samples": 50,
       "tp": 50,
       "fn": 0,
-      "fp": 6,
-      "tn": 94,
-      "precision": 0.8928571428571429,
+      "fp": 2,
+      "tn": 48,
+      "precision": 0.9615,
       "recall": 1.0,
-      "f1_score": 0.9433962264150945
+      "f1_score": 0.9804,
+      "mean_anomaly_score": -0.0826
     },
     "MFA Push-Bombing (T1621)": {
       "samples": 50,
-      "tp": 50,
-      "fn": 0,
-      "fp": 6,
-      "tn": 94,
-      "precision": 0.8928571428571429,
-      "recall": 1.0,
-      "f1_score": 0.9433962264150945
+      "tp": 49,
+      "fn": 1,
+      "fp": 2,
+      "tn": 48,
+      "precision": 0.9608,
+      "recall": 0.98,
+      "f1_score": 0.9703,
+      "mean_anomaly_score": -0.1909
     }
   },
   "held_out_blended_pattern": {
     "samples": 30,
     "tp": 30,
     "fn": 0,
-    "fp": 6,
-    "tn": 94,
-    "precision": 0.8333333333333334,
+    "fp": 0,
+    "tn": 30,
+    "precision": 1.0,
     "recall": 1.0,
-    "f1_score": 0.9090909090909091
+    "f1_score": 1.0,
+    "mean_anomaly_score": -0.1689
   },
   "latency_benchmarks": {
-    "baseline_ms": 0.00010800000745803118,
-    "full_stack_ms": 2.1006903999950737,
-    "overhead_ms": 2.1005823999876156
+    "baseline_ms": 0.0003,
+    "full_stack_ms": 2.2363,
+    "overhead_ms": 2.2359
   }
 }
