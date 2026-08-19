@@ -1,10 +1,11 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from src.config import settings
 from src.database import engine, Base
 from src.api.cases import router as cases_router
 from src.api.users import router as users_router
 from src.api.audit import router as audit_router
+from src.api.auth import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,11 +20,11 @@ app = FastAPI(
     description="""
     ## Zero-Trust Secure Backend & Identity Threat Detection
     
-    > **NOTICE**: In Phase 1, authentication and authorization are explicitly NOT YET ENFORCED.
-    > Real enforcement via WebAuthn, short-lived JWTs, and OPA sidecar policies is activated in Phases 3 and 4.
+    Implements WebAuthn passkey authentication, OIDC federated login, rotating refresh tokens with reuse detection, and append-only audit logging.
     """
 )
 
+app.include_router(auth_router)
 app.include_router(cases_router)
 app.include_router(users_router)
 app.include_router(audit_router)
@@ -34,5 +35,5 @@ def health_check():
         "status": "healthy",
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "auth_enforcement": "phase_1_scaffold_open"
+        "auth_enforcement": "phase_3_authn_enabled"
     }
