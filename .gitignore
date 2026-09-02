@@ -1,34 +1,25 @@
-﻿# Python
+# Python Cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+*.db
+*.sqlite
+*.sqlite3
+test*.db
 
-# Environments
+# Virtual Environments
+venv/
+env/
 .env
 .venv
-env/
-venv/
-ENV/
 
-# Database & local state
-*.sqlite3
-*.db
-*.log
-data/
-vault_data/
-
-# IDE
+# IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Crypto & keys
-*.pem
-*.key
-*.crt

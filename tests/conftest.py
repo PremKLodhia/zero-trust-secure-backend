@@ -1,25 +1,29 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from src.database import Base, get_db
 from src.api.main import app
 from src.models import User, CaseFile, AuditLog, RefreshTokenStore
 
-TEST_DATABASE_URL = "sqlite:///./test_shared.db"
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+# In-memory SQLite with StaticPool for zero disk artifacts and lightning speed
+TEST_DATABASE_URL = "sqlite:///:memory:"
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 @pytest.fixture(scope="session", autouse=True)
 def init_test_db():
-    Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
 
 @pytest.fixture(autouse=True)
 def clean_tables():
-    # Clean table data between test functions
     db = TestingSessionLocal()
     try:
         db.query(AuditLog).delete()
