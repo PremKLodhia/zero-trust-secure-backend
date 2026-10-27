@@ -16,9 +16,10 @@ from webauthn.helpers.structs import (
     ResidentKeyRequirement,
 )
 from src.config import settings
+from src.auth.webauthn.challenge_store import ChallengeStore
 
-# In-memory challenge store for active ceremonies
-_active_challenges: Dict[str, bytes] = {}
+# Active ceremony challenges: single use, expire after 5 minutes.
+challenge_store = ChallengeStore()
 
 def get_registration_options(user_id: str, username: str, user_display_name: str) -> str:
     user_handle = user_id.encode("utf-8")
@@ -33,13 +34,13 @@ def get_registration_options(user_id: str, username: str, user_display_name: str
             user_verification=UserVerificationRequirement.PREFERRED,
         ),
     )
-    _active_challenges[user_id] = options.challenge
+    challenge_store.put(f"register:{user_id}", options.challenge)
     return options_to_json(options)
 
 def verify_registration(user_id: str, credential_json: str) -> Tuple[str, str, int]:
-    expected_challenge = _active_challenges.pop(user_id, None)
+    expected_challenge = challenge_store.take(f"register:{user_id}")
     if not expected_challenge:
-        raise ValueError("No active registration challenge found for user")
+        raise ValueError("No active registration challenge found for user (missing, used or expired)")
 
     # In webauthn 3.0.0, use parse_registration_credential_json for Pydantic V2 compatibility
     credential = parse_registration_credential_json(credential_json)
@@ -64,7 +65,7 @@ def get_authentication_options(user_id: str, credential_id_b64: str) -> str:
         rp_id=settings.WEBAUTHN_RP_ID,
         user_verification=UserVerificationRequirement.PREFERRED,
     )
-    _active_challenges[user_id] = options.challenge
+    challenge_store.put(f"authenticate:{user_id}", options.challenge)
     return options_to_json(options)
 
 def verify_authentication(
@@ -74,9 +75,9 @@ def verify_authentication(
     stored_sign_count: int,
     credential_json: str
 ) -> int:
-    expected_challenge = _active_challenges.pop(user_id, None)
+    expected_challenge = challenge_store.take(f"authenticate:{user_id}")
     if not expected_challenge:
-        raise ValueError("No active authentication challenge found for user")
+        raise ValueError("No active authentication challenge found for user (missing, used or expired)")
 
     raw_public_key = base64.urlsafe_b64decode(public_key_b64.encode("utf-8"))
 

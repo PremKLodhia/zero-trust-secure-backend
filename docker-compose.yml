@@ -13,6 +13,8 @@ services:
       - VAULT_TOKEN=root
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:8000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env (see .env.example)}
+      - FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env (see .env.example)}
     depends_on:
       postgres:
         condition: service_healthy

@@ -2,7 +2,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from contextlib import asynccontextmanager
-from src.config import settings
+from src.config import settings, validate_startup_settings
 from src.database import engine, Base
 from src.api.cases import router as cases_router
 from src.api.users import router as users_router
@@ -11,6 +11,8 @@ from src.api.auth import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail secure: never serve with a default JWT secret outside DEV_MODE
+    validate_startup_settings()
     # Initialize database tables on startup
     Base.metadata.create_all(bind=engine)
     yield

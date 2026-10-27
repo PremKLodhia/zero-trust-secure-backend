@@ -7,6 +7,13 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+# Offline benchmark on synthetic data, normally run without Vault: opt in to the
+# DEV_MODE local KEK and use a throwaway field key unless real ones are provided.
+os.environ.setdefault("DEV_MODE", "true")
+if not os.environ.get("FIELD_ENCRYPTION_KEY"):
+    import base64
+    os.environ["FIELD_ENCRYPTION_KEY"] = base64.b64encode(os.urandom(32)).decode()
+
 from src.detection.model import IdentityThreatDetector
 from scripts.generate_traffic.benign_simulator import generate_benign_sessions
 from scripts.generate_traffic.credential_stuffing_simulator import generate_credential_stuffing_sessions

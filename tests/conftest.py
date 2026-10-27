@@ -1,4 +1,12 @@
-﻿import pytest
+﻿import base64
+import os
+
+# Tests run without Vault, so they use the DEV_MODE local KEK fallback, and a
+# random per-run field key. Set before any src import builds settings.
+os.environ.setdefault("DEV_MODE", "true")
+os.environ.setdefault("FIELD_ENCRYPTION_KEY", base64.b64encode(os.urandom(32)).decode())
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
