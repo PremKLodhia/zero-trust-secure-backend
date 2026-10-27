@@ -56,6 +56,30 @@ def test_dev_mode_follows_settings(monkeypatch):
     assert client.wrap_key(DEK).startswith(LOCAL_PREFIX)
 
 
+def test_vault_outage_is_retried_after_backoff(monkeypatch):
+    import src.crypto.vault_client as vc
+    clock = [100.0]
+    monkeypatch.setattr(vc.time, "monotonic", lambda: clock[0])
+    attempts = []
+
+    class FakeHvac:
+        def __init__(self, **kwargs):
+            attempts.append(kwargs)
+
+        def is_authenticated(self):
+            return len(attempts) > 1  # down on the first attempt, back afterwards
+
+    monkeypatch.setattr(vc.hvac, "Client", FakeHvac)
+    client = VaultTransitClient(dev_mode=False)
+
+    assert client._get_hvac_client() is None
+    assert client._get_hvac_client() is None  # within the backoff: no new attempt
+    assert len(attempts) == 1
+    clock[0] += vc.VAULT_RETRY_SECONDS + 1
+    assert client._get_hvac_client() is not None  # retried and recovered
+    assert len(attempts) == 2
+
+
 # --- Field key: loaded from settings, never from source ----------------------
 
 def test_field_crypto_refuses_without_key(monkeypatch):

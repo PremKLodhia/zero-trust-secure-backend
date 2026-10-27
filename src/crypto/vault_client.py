@@ -1,4 +1,5 @@
 ﻿import os
+import time
 import base64
 import logging
 import hvac
@@ -10,6 +11,8 @@ from src.crypto.errors import CryptoUnavailableError
 logger = logging.getLogger("crypto")
 
 LOCAL_PREFIX = "vault:v1:local:"
+# After a failed connection, skip Vault for this long before trying again.
+VAULT_RETRY_SECONDS = 30.0
 
 
 class VaultTransitClient:
@@ -34,22 +37,28 @@ class VaultTransitClient:
         # Development-only KEK; usable only when DEV_MODE is true.
         self._local_master_key = b"LOCAL_DEV_MASTER_KEK_32_BYTES_K!"
         self._client_cache = None
+        self._unavailable_until = 0.0
 
     @property
     def dev_mode(self) -> bool:
         return settings.DEV_MODE if self._dev_mode is None else self._dev_mode
 
     def _get_hvac_client(self):
-        # Only a working client is cached, so Vault is retried after an outage.
+        # A working client is cached. An outage is remembered for VAULT_RETRY_SECONDS so
+        # calls do not each wait on a connection timeout, then Vault is tried again.
         if self._client_cache is not None:
             return self._client_cache
+        if time.monotonic() < self._unavailable_until:
+            return None
         try:
             client = hvac.Client(url=self.vault_addr, token=self.token, timeout=0.5)
             if client.is_authenticated():
                 self._client_cache = client
+                return client
         except Exception as e:
             logger.warning(f"Vault unreachable at {self.vault_addr}: {e}")
-        return self._client_cache
+        self._unavailable_until = time.monotonic() + VAULT_RETRY_SECONDS
+        return None
 
     def wrap_key(self, plaintext_dek: bytes) -> str:
         """Wraps (encrypts) a Data Encryption Key using Vault Transit KEK."""
