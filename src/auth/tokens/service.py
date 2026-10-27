@@ -66,6 +66,32 @@ def issue_refresh_token_family(db: Session, user_id: str) -> str:
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
+def _revoke_family_for_reuse(db: Session, family_id: str, user_id: str, seq: int, client_ip: str) -> None:
+    """Critical breach: revoke every token in the family, audit it, and reject the request."""
+    db.query(RefreshTokenStore).filter(
+        RefreshTokenStore.token_family_id == family_id
+    ).update({"is_revoked": True}, synchronize_session=False)
+    db.commit()
+
+    # Log security audit event
+    audit = AuditLog(
+        actor_id=user_id,
+        actor_role="unknown",
+        action="REFRESH_TOKEN_FAMILY_REUSE_THEFT",
+        resource_type="auth",
+        resource_id=family_id,
+        client_ip=client_ip,
+        status="DENIED",
+        details=f"Suspected token theft: Refresh token reuse detected for family {family_id} (seq {seq})"
+    )
+    db.add(audit)
+    db.commit()
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Refresh token reuse detected. All sessions in this token family have been revoked."
+    )
+
 def rotate_refresh_token(db: Session, raw_token: str, client_ip: str = "127.0.0.1") -> Tuple[str, str]:
     """
     Rotates a refresh token.
@@ -107,38 +133,23 @@ def rotate_refresh_token(db: Session, raw_token: str, client_ip: str = "127.0.0.
             is_reused = True
 
     if is_reused:
-        # Critical Breach: Revoke all tokens in family
-        db.query(RefreshTokenStore).filter(
-            RefreshTokenStore.token_family_id == family_id
-        ).update({"is_revoked": True})
-        db.commit()
-
-        # Log security audit event
-        audit = AuditLog(
-            actor_id=user_id,
-            actor_role="unknown",
-            action="REFRESH_TOKEN_FAMILY_REUSE_THEFT",
-            resource_type="auth",
-            resource_id=family_id,
-            client_ip=client_ip,
-            status="DENIED",
-            details=f"Suspected token theft: Refresh token reuse detected for family {family_id} (seq {seq})"
-        )
-        db.add(audit)
-        db.commit()
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Refresh token reuse detected. All sessions in this token family have been revoked."
-        )
+        _revoke_family_for_reuse(db, family_id, user_id, seq, client_ip)
 
     # Valid rotation:
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account inactive or missing")
 
-    # Mark current token as revoked (used)
-    token_record.is_revoked = True
+    # Consume the presented token atomically. Concurrent refreshes with the same token can
+    # both pass the checks above; only one conditional UPDATE can flip is_revoked, so zero
+    # rows updated means another request already used this token: treat it as reuse.
+    claimed = db.query(RefreshTokenStore).filter(
+        RefreshTokenStore.token_jti == jti,
+        RefreshTokenStore.is_revoked.is_(False)
+    ).update({"is_revoked": True}, synchronize_session=False)
+    if claimed == 0:
+        db.rollback()
+        _revoke_family_for_reuse(db, family_id, user_id, seq, client_ip)
 
     # Issue next token in sequence
     new_jti = str(uuid.uuid4())
