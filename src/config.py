@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Zero-Trust Secure Evidence Exchange"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
+    # Explicit opt-in for local development shortcuts (local KEK fallback).
+    DEV_MODE: bool = False
     DATABASE_URL: str = "sqlite:///./test.db"
     
     # Auth & Tokens
@@ -26,6 +28,9 @@ class Settings(BaseSettings):
     VAULT_ADDR: str = "http://localhost:8200"
     VAULT_TOKEN: str = "root"
     VAULT_TRANSIT_KEY: str = "case-dek-kek"
+
+    # Field-level PII encryption: base64-encoded 32-byte AES-256 key. Required; never hard-coded.
+    FIELD_ENCRYPTION_KEY: str = ""
     
     # Anomaly Detection
     ANOMALY_CONTAMINATION_RATE: float = 0.05
@@ -33,3 +38,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
+
