@@ -6,7 +6,7 @@
 [![Authorization: OPA](https://img.shields.io/badge/AuthZ-Open%20Policy%20Agent-purple.svg)](#architecture--data-flow)
 [![Encryption: Vault Transit](https://img.shields.io/badge/Crypto-Vault%20Envelope%20AES--256--GCM-orange.svg)](#architecture--data-flow)
 
-A defense-in-depth secure case-file exchange backend for security operations teams. The system implements end-to-end zero-trust controls, cryptographic data protection with HashiCorp Vault, fail-secure policy enforcement via Open Policy Agent (OPA), and behavioural identity threat detection via an IsolationForest ML pipeline.
+A defense-in-depth secure case-file exchange backend for security operations teams. The system implements end-to-end zero-trust controls, cryptographic data protection with HashiCorp Vault, fail-secure policy enforcement via Open Policy Agent (OPA), and a behavioural identity threat detector (IsolationForest) that is evaluated offline and not yet wired into live requests.
 
 ---
 
@@ -16,7 +16,7 @@ A defense-in-depth secure case-file exchange backend for security operations tea
 - **Empirical Control Validation**: Every control is backed by automated tests, real attack simulators, or actual security scans—not assertions in prose.
 - **Transparent Vulnerability Remediation**: Features a genuine deliberate vulnerability exercise (JWT algorithm confusion / `alg: none` bypass), a working exploit script, before/after captures, and remediation diff in [vuln-writeup.md](docs/vuln-writeup.md).
 - **100% Synthetic Data & Honest Evaluation**: All data, PII, and telemetry are synthetically generated. Metrics are derived from reproducible runs of `scripts/eval/run_eval.py` without fabricated numbers.
-- **SecOps-Calibrated FPR**: The anomaly detector contamination rate is tuned for high recall ($0.9600 - 1.0000$) in high-security forensic case exchange environments. Flagged sessions ($4.00\%$ benign FPR) are routed to SOC analyst review and step-up verification rather than hard user lockouts.
+- **SecOps-Calibrated FPR**: The anomaly detector contamination rate is tuned for high recall ($0.9600 - 1.0000$) in high-security forensic case exchange environments. The intended response to a flagged session ($4.00\%$ benign FPR) is SOC analyst review and step-up verification rather than a hard lockout; this is not implemented yet, because the detector currently runs only offline (see below).
 
 ---
 
@@ -33,10 +33,12 @@ flowchart TD
         D -->|Rotating Refresh Tokens| F[(Token Family Store)]
     end
 
-    subgraph DefenseMiddleware [Security & Telemetry Middleware]
-        E --> G[Telemetry Extractor]
-        G -->|Engineered Feature Vector| H[IsolationForest Anomaly Detector]
+    subgraph DefenseMiddleware [Security Middleware]
         E --> I[AuthZ Enforcement Engine]
+    end
+
+    subgraph OfflineEval [Offline evaluation only: not wired into live requests]
+        G[Telemetry Extractor] -->|Engineered Feature Vector| H[IsolationForest Anomaly Detector]
     end
 
     subgraph AuthZLayer [Fail-Secure Policy Engine]
@@ -58,6 +60,8 @@ flowchart TD
 ---
 
 ## Empirical Benchmark Results
+
+> **Offline only.** `IdentityThreatDetector` is trained and scored by `scripts/eval/run_eval.py` on synthetic sessions. It is not yet called from the API, so live requests are not scored or blocked by it.
 
 Evaluated with `scripts/eval/run_eval.py` across 300 benign baseline training sessions, 150 held-out benign test sessions, 150 attack sessions across 3 distinct MITRE identity techniques, and 30 held-out blended anomaly sessions:
 
@@ -124,7 +128,7 @@ Copy `.env.example` to `.env` and set `JWT_SECRET_KEY` and `FIELD_ENCRYPTION_KEY
 
 ### 2. Running Automated Tests & Fail-Secure Validations
 ```powershell
-# Run the complete test suite (all 20 tests)
+# Run the complete test suite (42 tests)
 pytest -v tests/
 ```
 
@@ -155,7 +159,7 @@ docker compose up -d --build
 - [x] **Phase 3**: Authentication (WebAuthn, OIDC, Token Family Rotation)
 - [x] **Phase 4**: Authorization (OPA Sidecar & Fail-Secure Verification)
 - [x] **Phase 5**: Data Protection (Vault Envelope & Field-Level Encryption)
-- [x] **Phase 6**: Behavioural Identity Anomaly Detection Pipeline
+- [x] **Phase 6**: Behavioural Identity Anomaly Detection Pipeline (offline evaluation; live request integration not yet done)
 - [x] **Phase 7**: Continuous Adversarial Testing (Semgrep, ZAP, JWT Vuln & Fix)
 - [x] **Phase 8**: Rigorous Evaluation & Latency Benchmarks
 - [x] **Phase 9**: Portfolio Documentation & Release Packaging
