@@ -3,8 +3,10 @@ import os
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi.testclient import TestClient
 
-from src.config import settings
+from src.api.main import app
+from src.config import DEFAULT_JWT_SECRET_KEY, settings, validate_startup_settings
 from src.crypto.errors import CryptoUnavailableError
 from src.crypto.field_crypto import FieldCrypto
 from src.crypto.vault_client import LOCAL_PREFIX, VaultTransitClient
@@ -81,3 +83,33 @@ def test_field_crypto_uses_configured_key(monkeypatch):
     with pytest.raises(Exception):
         FieldCrypto.decrypt_field(ciphertext)
 
+
+# --- Startup: default JWT secret ----------------------------------------------
+
+def test_startup_refuses_default_jwt_secret_outside_dev_mode(monkeypatch):
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", DEFAULT_JWT_SECRET_KEY)
+    monkeypatch.setattr(settings, "DEV_MODE", False)
+    with pytest.raises(RuntimeError):
+        validate_startup_settings()
+    with pytest.raises(RuntimeError):
+        with TestClient(app):
+            pass
+
+
+def test_startup_refuses_env_example_placeholder(monkeypatch):
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "change_this_in_production_super_secret_key_minimum_32_bytes_long")
+    monkeypatch.setattr(settings, "DEV_MODE", False)
+    with pytest.raises(RuntimeError):
+        validate_startup_settings()
+
+
+def test_startup_allows_default_secret_in_dev_mode(monkeypatch):
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", DEFAULT_JWT_SECRET_KEY)
+    monkeypatch.setattr(settings, "DEV_MODE", True)
+    validate_startup_settings()
+
+
+def test_startup_allows_real_secret(monkeypatch):
+    monkeypatch.setattr(settings, "JWT_SECRET_KEY", "a-real-secret-" + os.urandom(16).hex())
+    monkeypatch.setattr(settings, "DEV_MODE", False)
+    validate_startup_settings()

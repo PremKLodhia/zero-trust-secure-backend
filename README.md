@@ -120,7 +120,7 @@ python -m venv .venv
 pip install -e .[dev]
 ```
 
-Copy `.env.example` to `.env` and set `FIELD_ENCRYPTION_KEY` (the file shows how to generate it). The service fails closed: without Vault it refuses to encrypt or decrypt. For local development without Vault, set `DEV_MODE=true` to allow the local key fallback; never enable it in production.
+Copy `.env.example` to `.env` and set `JWT_SECRET_KEY` and `FIELD_ENCRYPTION_KEY` (the file shows how to generate both). The service fails closed: without Vault it refuses to encrypt or decrypt, and with a placeholder JWT secret it refuses to start. For local development without Vault, set `DEV_MODE=true` to allow the local key fallback and the default JWT secret; never enable it in production.
 
 ### 2. Running Automated Tests & Fail-Secure Validations
 ```powershell
