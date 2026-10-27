@@ -128,7 +128,7 @@ Copy `.env.example` to `.env` and set `JWT_SECRET_KEY` and `FIELD_ENCRYPTION_KEY
 
 ### 2. Running Automated Tests & Fail-Secure Validations
 ```powershell
-# Run the complete test suite (42 tests)
+# Run the complete test suite (43 tests)
 pytest -v tests/
 ```
 
