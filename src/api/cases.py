@@ -121,7 +121,22 @@ def list_cases(
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied by policy engine")
 
-    cases = db.query(CaseFile).all()
+    # LIST_CASES only grants the listing itself; each case is returned only if the
+    # caller could also READ_CASE it, so restricted (e.g. TLP:RED) titles never leak.
+    all_cases = db.query(CaseFile).all()
+    cases = [
+        case for case in all_cases
+        if opa_client.evaluate_access(
+            user=current_user,
+            action="READ_CASE",
+            resource_type="case_file",
+            case={
+                "id": case.id,
+                "classification": case.classification,
+                "assigned_analyst_id": case.assigned_analyst_id
+            }
+        )
+    ]
 
     log_audit_event(
         db=db,
@@ -131,7 +146,7 @@ def list_cases(
         resource_id=None,
         client_ip=client_ip,
         status="SUCCESS",
-        details=f"Listed {len(cases)} cases"
+        details=f"Listed {len(cases)} of {len(all_cases)} cases (filtered by READ_CASE policy)"
     )
 
     return cases
